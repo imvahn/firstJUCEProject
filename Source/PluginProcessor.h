@@ -10,6 +10,17 @@
 
 #include <JuceHeader.h>
 
+// struct to hold plugin parameters
+struct ChainSettings
+{
+    float peakFreq { 0 }, peakGainInDecibels { 0 }, peakQuality { 1.f };
+    float lowCutFreq { 0 }, highCutFreq { 0 };
+    int lowCutSlope { 0 }, highCutSlope { 0 };
+};
+
+// helper function to give us all the above parameter values
+ChainSettings getChainSettings(juce::AudioProcessorValueTreeState& apvts);
+
 //==============================================================================
 /**
 */
@@ -53,7 +64,11 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
+    // declare an audioprocessorvaluetree to coordinate syncing parameters between gui and dsp
+    
+    // function to provide list of parameters
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    // expects us to provide a list of all parameters when it is created
     juce::AudioProcessorValueTreeState apvts {*this, nullptr, "Parameters", createParameterLayout()};
 
 private:
@@ -66,6 +81,14 @@ private:
     using MonoChain = juce::dsp::ProcessorChain<CutFilter, Filter, CutFilter>;
     
     MonoChain leftChain, rightChain;
+    
+    // need an enum because the get function requires an index
+    enum ChainPositions
+    {
+        LowCut,
+        Peak,
+        HighCut
+    };
     
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleEQAudioProcessor)
