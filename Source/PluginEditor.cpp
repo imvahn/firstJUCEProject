@@ -13,9 +13,15 @@
 SimpleEQAudioProcessorEditor::SimpleEQAudioProcessorEditor (SimpleEQAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
+    
+    // make sliders visible
+    for( auto* comp : getComps() )
+    {
+        addAndMakeVisible(comp);
+    }
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
-    setSize (400, 300);
+    setSize (600, 400);
 }
 
 SimpleEQAudioProcessorEditor::~SimpleEQAudioProcessorEditor()
@@ -37,4 +43,41 @@ void SimpleEQAudioProcessorEditor::resized()
 {
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
+    
+    // bounding box for the component
+    auto bounds = getLocalBounds();
+    // dedicate an area for the top (waveform visualizer)
+    auto responseArea = bounds.removeFromTop(bounds.getHeight() * 0.33);
+    
+    auto lowCutArea = bounds.removeFromLeft(bounds.getWidth() * 0.33);
+    // now that 33% is removed from left, the remaining area is 66%. So 50% of that is 33%
+    auto highCutArea = bounds.removeFromRight(bounds.getWidth() * 0.5);
+    
+    // set sliders to be in bounds
+    lowCutFreqSlider.setBounds(lowCutArea.removeFromTop(lowCutArea.getHeight() * 0.5));
+    lowCutSlopeSlider.setBounds(lowCutArea);
+    
+    highCutFreqSlider.setBounds(highCutArea.removeFromTop(highCutArea.getHeight() * 0.5));
+    highCutSlopeSlider.setBounds(highCutArea);
+    
+    peakFreqSlider.setBounds(bounds.removeFromTop(bounds.getHeight() * 0.33));
+    // same as highCutArea
+    peakGainSlider.setBounds(bounds.removeFromTop(bounds.getHeight() * 0.5));
+    // set slider to be in bounds
+    peakQualitySlider.setBounds(bounds);
+}
+
+// return vector with all slider components
+std::vector<juce::Component*> SimpleEQAudioProcessorEditor::getComps()
+{
+    return
+    {
+        &peakFreqSlider,
+        &peakGainSlider,
+        &peakQualitySlider,
+        &lowCutFreqSlider,
+        &highCutFreqSlider,
+        &lowCutSlopeSlider,
+        &highCutSlopeSlider
+    };
 }
