@@ -38,12 +38,93 @@ SimpleEQAudioProcessorEditor::~SimpleEQAudioProcessorEditor()
 //==============================================================================
 void SimpleEQAudioProcessorEditor::paint (juce::Graphics& g)
 {
+    using namespace juce; // so we don't have to type "juce::" everywhere
     // (Our component is opaque, so we must completely fill the background with a solid colour)
-    g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
+    g.fillAll (Colours::black);
 
-    g.setColour (juce::Colours::white);
-    g.setFont (juce::FontOptions (15.0f));
-    g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
+    // area we will draw response curve in
+    auto bounds = getLocalBounds();
+    auto responseArea = bounds.removeFromTop(bounds.getHeight() * 0.33);
+
+    auto w = responseArea.getWidth();
+    
+    // get individual chain element, call getMagnitudeForFrequency for each element in the chain
+    auto& lowcut = monoChain.get<ChainPositions::LowCut>();
+    auto& peak = monoChain.get<ChainPositions::Peak>();
+    auto& highcut = monoChain.get<ChainPositions::HighCut>();
+    
+    // need samplerate for getMagnitudeForFrequency
+    auto sampleRate = audioProcessor.getSampleRate();
+    
+    // need a place to store all the magnitudes, which are returned from getMagnitudeForFrequency as dobules
+    std::vector<double> mags;
+    
+    mags.resize(w);
+    
+    // iterate through each pixel and compute the magnitude at that frequency
+    for ( int i = 0; i < w; ++i )
+    {
+        // start at 1 because gain is multiplicative
+        double mag = 1.f;
+        // map normalized pixel number to its frequency within the human hearing range
+        auto freq = mapToLog10(double(i) / double(w), 20.0, 20000.0);
+        
+        // call getMagnitudeForFrequency with this freq and multiply results by mag
+        // for each type of chain
+        if (! monoChain.isBypassed<ChainPositions::Peak>() )
+            mag *= peak.coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        // lowcut links
+        if (! lowcut.isBypassed<0>())
+            mag *= lowcut.get<0>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        if (! lowcut.isBypassed<1>())
+            mag *= lowcut.get<1>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        if (! lowcut.isBypassed<2>())
+            mag *= lowcut.get<2>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        if (! lowcut.isBypassed<3>())
+            mag *= lowcut.get<3>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        // highcut links
+        if (! highcut.isBypassed<0>())
+            mag *= highcut.get<0>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        if (! highcut.isBypassed<1>())
+            mag *= highcut.get<1>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        if (! highcut.isBypassed<2>())
+            mag *= highcut.get<2>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        if (! highcut.isBypassed<3>())
+            mag *= highcut.get<3>().coefficients->getMagnitudeForFrequency(freq, sampleRate);
+        
+        // convert magnitude into decibels and store it
+        mags[i] = Decibels::gainToDecibels(mag);
+    }
+    
+    // convert vector of magnitudes into a path and then draw it
+    Path responseCurve;
+    
+    // map decibel value to response area
+    // define maximums and minimums of response area
+    const double outputMin = responseArea.getBottom();
+    const double outputMax = responseArea.getY();
+    auto map = [outputMin, outputMax](double input)
+    {
+        // peak control can go from -24 to +24, so window should reflect that
+        return jmap(input, -24.0, 24.0, outputMin, outputMax);
+    };
+    
+    // map our decibels to screen coordinates
+    responseCurve.startNewSubPath(responseArea.getX(), map(mags.front()));
+    
+    // create lineTos for every other magnitude
+    for ( size_t i = 1; i < mags.size(); ++i )
+    {
+        responseCurve.lineTo(responseArea.getX() + i, map(mags[i]));
+    }
+    
+    // background border
+    g.setColour(Colours::orange);
+    g.drawRoundedRectangle(responseArea.toFloat(), 4.f, 1.f);
+    
+    // draw the path
+    g.setColour(Colours::white);
+    g.strokePath(responseCurve, PathStrokeType(2.f));
 }
 
 void SimpleEQAudioProcessorEditor::resized()
@@ -72,6 +153,24 @@ void SimpleEQAudioProcessorEditor::resized()
     peakGainSlider.setBounds(bounds.removeFromTop(bounds.getHeight() * 0.5));
     // set slider to be in bounds
     peakQualitySlider.setBounds(bounds);
+}
+
+void SimpleEQAudioProcessorEditor::parameterValueChanged(int parameterIndex, float newValue)
+{
+    // set atomic flag to true
+    parametersChanged.set(true);
+}
+
+// check if atomic flag was changed in the timer callback
+void SimpleEQAudioProcessorEditor::timerCallback()
+{
+    // if it is true that parameters have been changed, we are going to set the parameters changed value back to false to indicate nothing has changed since the flag was checked
+    if ( parametersChanged.compareAndSetBool(false, true) )
+    {
+        // update the monochain
+        // signal a repaint
+        
+    }
 }
 
 // return vector with all slider components
