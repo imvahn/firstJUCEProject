@@ -62,6 +62,8 @@ private:
     
     // create a vector to store values so it's easy to modify all of them at once by just iterating through
     std::vector<juce::Component*> getComps();
+    
+    MonoChain monoChain;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleEQAudioProcessorEditor)
 };
