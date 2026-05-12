@@ -26,13 +26,30 @@ highCutSlopeSliderAttachment(audioProcessor.apvts, "HighCut Slope", highCutSlope
     {
         addAndMakeVisible(comp);
     }
+    
+    // listen for when the parameters change
+    const auto& params = audioProcessor.getParameters();
+    for ( auto param : params )
+    {
+        param->addListener(this);
+    }
+    
+    // start timer with a 60hz refresh rate
+    startTimerHz(60);
+    
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
     setSize (600, 400);
 }
 
+// if we register as a listener, we need to deregister as a listener
 SimpleEQAudioProcessorEditor::~SimpleEQAudioProcessorEditor()
 {
+    const auto& params = audioProcessor.getParameters();
+    for ( auto param : params )
+    {
+        param->removeListener(this);
+    }
 }
 
 //==============================================================================
@@ -62,7 +79,7 @@ void SimpleEQAudioProcessorEditor::paint (juce::Graphics& g)
     mags.resize(w);
     
     // iterate through each pixel and compute the magnitude at that frequency
-    for ( int i = 0; i < w; ++i )
+    for ( int i = 1; i < w; ++i )
     {
         // start at 1 because gain is multiplicative
         double mag = 1.f;
@@ -167,9 +184,14 @@ void SimpleEQAudioProcessorEditor::timerCallback()
     // if it is true that parameters have been changed, we are going to set the parameters changed value back to false to indicate nothing has changed since the flag was checked
     if ( parametersChanged.compareAndSetBool(false, true) )
     {
+        DBG( "params changed" ); // debug statement
         // update the monochain
-        // signal a repaint
+        auto chainSettings = getChainSettings(audioProcessor.apvts);
+        auto peakCoefficients = makePeakFilter(chainSettings, audioProcessor.getSampleRate());
+        updateCoefficients(monoChain.get<ChainPositions::Peak>().coefficients, peakCoefficients);
         
+        // signal a repaint
+        repaint();
     }
 }
 
