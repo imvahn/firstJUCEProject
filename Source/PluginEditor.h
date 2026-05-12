@@ -11,12 +11,43 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-struct CustomRotarySlider: juce::Slider
+struct LookAndFeel : juce::LookAndFeel_V4
 {
-    CustomRotarySlider(): juce::Slider(juce::Slider::SliderStyle::RotaryHorizontalVerticalDrag, juce::Slider::TextEntryBoxPosition::NoTextBox)
+    virtual void drawRotarySlider (juce::Graphics&,
+                                   int x, int y, int width, int height,
+                                   float sliderPosProportional,
+                                   float rotaryStartAngle,
+                                   float rotaryEndAngle,
+                                   juce::Slider&) override { }
+};
+
+struct RotarySliderWithLabels: juce::Slider
+{
+    RotarySliderWithLabels(juce::RangedAudioParameter& rap, const juce::String& unitSuffix) :
+    juce::Slider(juce::Slider::SliderStyle::RotaryHorizontalVerticalDrag, juce::Slider::TextEntryBoxPosition::NoTextBox),
+    param(&rap),
+    suffix(unitSuffix)
     {
-        
+        setLookAndFeel(&lnf);
     }
+    
+    // remember to unset LookAndFeel in the destructor
+    ~RotarySliderWithLabels()
+    {
+        setLookAndFeel(nullptr);
+    }
+    
+    void paint(juce::Graphics& g) override { }
+    juce::Rectangle<int> getSliderBounds() const;
+    int getTextHeight() const { return 14; }
+    juce::String getDisplayString() const;
+private:
+    // instance of LookAndFeel class
+    LookAndFeel lnf;
+    
+    // base class for member functions that allow info to be pulled from APVTS
+    juce::RangedAudioParameter* param;
+    juce::String suffix;
 };
 
 // creating external components
@@ -62,7 +93,7 @@ private:
     // access the processor object that created it.
     SimpleEQAudioProcessor& audioProcessor;
         
-    CustomRotarySlider
+    RotarySliderWithLabels
     peakFreqSlider,
     peakGainSlider,
     peakQualitySlider,
