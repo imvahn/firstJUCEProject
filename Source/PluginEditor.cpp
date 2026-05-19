@@ -100,6 +100,35 @@ void RotarySliderWithLabels::paint(juce::Graphics &g)
                                       startAng,
                                       endAng,
                                       *this);
+    
+    auto center = sliderBounds.toFloat().getCentre();
+    auto radius = sliderBounds.getWidth() * 0.5f;
+    
+    g.setColour(Colour(0u, 172u, 1u));
+    g.setFont(getTextHeight());
+    
+    auto numChoices = labels.size();
+    for( int i = 0; i < numChoices; ++i )
+    {
+        auto pos = labels[i].pos;
+        jassert(0.f <= pos);
+        jassert(pos <= 1.f);
+        
+        auto ang = jmap(pos, 0.f, 1.f, startAng, endAng);
+                
+        // use this to find centerpoint of bounding box for this particular angle
+        // go some distance away from it that's further out from the edge of the circle
+        auto c = center.getPointOnCircumference(radius + getTextHeight() * 0.5f + 1, ang);
+        
+        Rectangle<float> r;
+        auto str = labels[i].label;
+        r.setSize(juce::GlyphArrangement::getStringWidth(g.getCurrentFont(), str), getTextHeight());
+        r.setCentre(c);
+        // move the text down a little from the edge offset
+        r.setY(r.getY() + getTextHeight());
+        
+        g.drawFittedText(str, r.toNearestInt(), juce::Justification::centred, 1);
+    }
 }
 
 juce::Rectangle<int> RotarySliderWithLabels::getSliderBounds() const
@@ -319,6 +348,9 @@ highCutFreqSliderAttachment(audioProcessor.apvts, "HighCut Freq", highCutFreqSli
 lowCutSlopeSliderAttachment(audioProcessor.apvts, "LowCut Slope", lowCutSlopeSlider),
 highCutSlopeSliderAttachment(audioProcessor.apvts, "HighCut Slope", highCutSlopeSlider)
 {
+    // add min and max ranges
+    peakFreqSlider.labels.add({0.f, "20Hz"});
+    peakFreqSlider.labels.add({1.f, "20kHz"});
     
     // make sliders visible
     for( auto* comp : getComps() )
