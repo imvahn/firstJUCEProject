@@ -32,7 +32,7 @@ void LookAndFeel::drawRotarySlider(juce::Graphics & g,
     g.setColour(Colour(255u, 154u, 1u));
     g.drawEllipse(bounds, 1.f);
     
-    if( auto* rswl = dynamic_cast<RotarySliderWithLabels*>(&slider))
+    if( auto* rswl = dynamic_cast<RotarySliderWithLabels*>(&slider) )
     {
         // draw "hand"
         auto center = bounds.getCentre();
@@ -73,7 +73,6 @@ void LookAndFeel::drawRotarySlider(juce::Graphics & g,
         g.drawFittedText(text, r.toNearestInt(), juce::Justification::centred, 1);
     }
 }
-
 //==============================================================================
 void RotarySliderWithLabels::paint(juce::Graphics &g)
 {
@@ -86,10 +85,10 @@ void RotarySliderWithLabels::paint(juce::Graphics &g)
     
     auto sliderBounds = getSliderBounds();
     
-    g.setColour(Colours::red);
-    g.drawRect(getLocalBounds());
-    g.setColour(Colours::yellow);
-    g.drawRect(sliderBounds);
+//    g.setColour(Colours::red);
+//    g.drawRect(getLocalBounds());
+//    g.setColour(Colours::yellow);
+//    g.drawRect(sliderBounds);
     
     
     getLookAndFeel().drawRotarySlider(g,
@@ -120,7 +119,43 @@ juce::Rectangle<int> RotarySliderWithLabels::getSliderBounds() const
 
 juce::String RotarySliderWithLabels::getDisplayString() const
 {
-    return juce::String(getValue());
+    // if our parameter is a choice, we can use that param directly
+    if( auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*>(param) )
+        return choiceParam->getCurrentChoiceName();
+    
+    juce::String str;
+    bool addK = false;
+    
+    // use a cast to check if it is actually an audio parameter float.
+    if( auto* floatParam = dynamic_cast<juce::AudioParameterFloat*>(param) )
+    {
+        // check if value is over 1000 then convert to kHz value
+        float val = getValue();
+        
+        if ( val > 999.f )
+        {
+            val /= 1000.f;
+            addK = true;
+        }
+        
+        // only want 2 decimal places
+        str = juce::String(val, (addK ? 2 : 0));
+    }
+    else
+    {
+        jassertfalse; // this shouldn't happen!
+    }
+    
+    if( suffix.isNotEmpty() )
+    {
+        str << " ";
+        if( addK )
+            str << "k";
+        
+        str << suffix;
+    }
+    
+    return str;
 }
 
 //==============================================================================
