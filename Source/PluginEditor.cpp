@@ -252,9 +252,13 @@ void ResponseCurveComponent::paint (juce::Graphics& g)
     using namespace juce; // so we don't have to type "juce::" everywhere
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll (Colours::black);
+    
+    // draw the grid
+    g.drawImage(background, getLocalBounds().toFloat());
 
     // area we will draw response curve in
-    auto responseArea = getLocalBounds();
+//    auto responseArea = getRenderArea();
+    auto responseArea = getAnalysisArea();
     
     auto w = responseArea.getWidth();
     
@@ -330,11 +334,91 @@ void ResponseCurveComponent::paint (juce::Graphics& g)
     
     // background border
     g.setColour(Colours::orange);
-    g.drawRoundedRectangle(responseArea.toFloat(), 4.f, 1.f);
+    g.drawRoundedRectangle(getRenderArea().toFloat(), 4.f, 1.f);
     
     // draw the path
     g.setColour(Colours::white);
     g.strokePath(responseCurve, PathStrokeType(2.f));
+}
+
+void ResponseCurveComponent::resized()
+{
+    using namespace juce;
+    background = Image(Image::PixelFormat::RGB, getWidth(), getHeight(), true);
+    
+    Graphics g(background);
+    
+    // draw values for frequency lines
+    Array<float> freqs
+    {
+        20, 30, 40, 50, 100,
+        200, 300, 400, 500, 1000,
+        2000, 3000, 4000, 5000, 10000,
+        20000
+    };
+    
+    auto renderArea = getAnalysisArea();
+    auto left = renderArea.getX();
+    auto right = renderArea.getRight();
+    auto top = renderArea.getY();
+    auto bottom = renderArea.getBottom();
+    auto width = renderArea.getWidth();
+    
+    Array<float> xs;
+    for( auto f : freqs )
+    {
+        // convert frequency value to normalized position
+        auto normX = mapFromLog10(f, 20.f, 20000.f);
+        // window based off the edge of our render area
+        xs.add(left + width * normX);
+    }
+    
+    g.setColour(Colours::dimgrey);
+    for( auto x : xs )
+    {
+        g.drawVerticalLine(x, top, bottom);
+    }
+    
+    // draw values for gain lines
+    Array<float> gain
+    {
+        -24, -12, 0, 12, 24
+    };
+    
+    for( auto gDb : gain )
+    {
+        auto y = jmap(gDb, -24.f, 24.f, float(bottom), float(top));
+        g.setColour(gDb == 0.f ? Colour(0u, 172u, 1u) : Colours::darkgrey);
+        g.drawHorizontalLine(y, left, right);
+    }
+    
+//    g.drawRect(getAnalysisArea());
+}
+
+juce::Rectangle<int> ResponseCurveComponent::getRenderArea()
+{
+    auto bounds = getLocalBounds();
+    
+    // JUCE_LIVE_CONSTANT must be on separate lines
+//    auto xPad = JUCE_LIVE_CONSTANT(5);
+//    auto yPad = JUCE_LIVE_CONSTANT(5);
+//    bounds.reduce(xPad, yPad);
+//    bounds.reduce(10, 8);
+    // manually doing all 4 sides since reduce does x and y only
+    bounds.removeFromTop(12);
+    bounds.removeFromBottom(2);
+    bounds.removeFromLeft(20);
+    bounds.removeFromRight(20);
+    
+    return bounds;
+}
+
+juce::Rectangle<int> ResponseCurveComponent::getAnalysisArea()
+{
+    auto bounds = getRenderArea();
+    bounds.removeFromTop(4);
+    bounds.removeFromBottom(4);
+    return bounds;
 }
 
 //==============================================================================
