@@ -428,7 +428,7 @@ void ResponseCurveComponent::resized()
         
     }
     
-    // loop through horizontal lines and add gain labels
+    // loop through horizontal lines and add horizontal labels
     for( auto gDb : gain )
     {
         auto y = jmap(gDb, -24.f, 24.f, float(bottom), float(top));
@@ -442,13 +442,25 @@ void ResponseCurveComponent::resized()
         
         Rectangle<int> r;
         r.setSize(textWidth, fontHeight);
-        // right side of screen
+        // gain labels on the right
         r.setX(getWidth() - textWidth);
         r.setCentre(r.getCentreX(), y);
         
         g.setColour(gDb == 0.f ? Colour(0u, 172u, 1u) : Colours::lightgrey);
         
         g.drawFittedText(str, r, juce::Justification::centred, 1);
+        
+        // decibel labels on the left
+        str.clear();
+        str << (gDb - 24.f);
+        
+        r.setX(1);
+        textWidth = juce::GlyphArrangement::getStringWidth(g.getCurrentFont(), str);
+        r.setSize(textWidth, fontHeight);
+        g.setColour(Colours::lightgrey);
+        g.drawFittedText(str, r, juce::Justification::centred, 1);
+
+        
     }
 }
 
