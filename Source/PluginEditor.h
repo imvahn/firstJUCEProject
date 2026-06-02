@@ -213,6 +213,33 @@ private:
     juce::String suffix;
 };
 
+// FFT path producer class
+struct PathProducer
+{
+    PathProducer(SingleChannelSampleFifo<SimpleEQAudioProcessor::BlockType>& scsf) :
+    leftChannelFifo(&scsf)
+    {
+        // configure FFT data generator
+        leftChannelFFTDataGenerator.changeOrder(FFTOrder::order2048);
+        // initialize the mono buffer with the proper size
+        monoBuffer.setSize(1, leftChannelFFTDataGenerator.getFFTSize());
+    }
+    void process(juce::Rectangle<float> fftBounds, double sampleRate);
+    juce::Path getPath() { return leftChannelFFTPath; }
+private:
+    // convert audio samples into FFT data
+    SingleChannelSampleFifo<SimpleEQAudioProcessor::BlockType>* leftChannelFifo;
+    // buffer through which we will be ferrying blocks of audio from right to left
+    juce::AudioBuffer<float> monoBuffer;
+    
+    // FFTDataGenerator operates on vectors of floats, not audio buffers
+    FFTDataGenerator<std::vector<float>> leftChannelFFTDataGenerator;
+    
+    AnalyzerPathGenerator<juce::Path> pathProducer;
+    
+    juce::Path leftChannelFFTPath;
+};
+
 // creating external components
 struct ResponseCurveComponent: juce::Component,
 // register as a listener to parameters in order to respond to parameter changes
@@ -246,18 +273,7 @@ private:
     
     juce::Rectangle<int> getAnalysisArea();
     
-    // convert audio samples into FFT data
-    SingleChannelSampleFifo<SimpleEQAudioProcessor::BlockType>* leftChannelFifo;
-    // buffer through which we will be ferrying blocks of audio from right to left
-    juce::AudioBuffer<float> monoBuffer;
-    
-    // FFTDataGenerator operates on vectors of floats, not audio buffers
-    FFTDataGenerator<std::vector<float>> leftChannelFFTDataGenerator;
-    
-    AnalyzerPathGenerator<juce::Path> pathProducer;
-    
-    juce::Path leftChannelFFTPath;
-    
+    PathProducer leftPathProducer, rightPathProducer;
 };
 
 //==============================================================================
