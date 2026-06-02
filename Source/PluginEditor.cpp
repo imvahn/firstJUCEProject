@@ -188,7 +188,9 @@ juce::String RotarySliderWithLabels::getDisplayString() const
 }
 
 //==============================================================================
-ResponseCurveComponent::ResponseCurveComponent(SimpleEQAudioProcessor& p) : audioProcessor(p)
+ResponseCurveComponent::ResponseCurveComponent(SimpleEQAudioProcessor& p) :
+audioProcessor(p),
+leftChannelFifo(&audioProcessor.leftChannelFifo)
 {
     // listen for when the parameters change
     const auto& params = audioProcessor.getParameters();
@@ -196,6 +198,18 @@ ResponseCurveComponent::ResponseCurveComponent(SimpleEQAudioProcessor& p) : audi
     {
         param->addListener(this);
     }
+    
+    /*
+     We are splitting up the audio spectrum (from 20Hz to 20000Hz) into 2048 or 4096, etc. equal sized frequency bins, which store the magnitude level for each range of frequencies.
+     If our sample rate is 48000 and we have 2048 bins, 48000 / 2048 = 23
+     Which means each bin is 23Hz in width.
+     This means that the lower end of the frequency spectrum will have a lower resolution, because 20Hz to 50Hz is 2 bins whereas 2kHz to 5kHz is like 100 bins.
+     When you make the resolution higher, i.e. 4096, you get higher quality on the lower end of the spectrum at the expense of CPU.
+     */
+    // configure FFT data generator
+    leftChannelFFTDataGenerator.changeOrder(FFTOrder::order2048);
+    // initialize the mono buffer with the proper size
+    monoBuffer.setSize(1, leftChannelFFTDataGenerator.getFFTSize());
     
     // update the monochain
     updateChain();
@@ -223,6 +237,55 @@ void ResponseCurveComponent::parameterValueChanged(int parameterIndex, float new
 // check if atomic flag was changed in the timer callback
 void ResponseCurveComponent::timerCallback()
 {
+    juce::AudioBuffer<float> tempIncomingBuffer;
+    // while there are buffers to pull,
+    while( leftChannelFifo->getNumCompleteBuffersAvailable() > 0 )
+    {
+        // if we can pull a buffer,
+        if( leftChannelFifo->getAudioBuffer(tempIncomingBuffer) )
+        {
+            // send it to the FFT data generator.
+            
+            // shift the mono buffer forward by however many samples are in the temporary incoming buffer
+            auto size = tempIncomingBuffer.getNumSamples();
+            // shifting over the data
+            // copy everything from 0th index, start reading from that point, continue reading until the size of the buffer
+            juce::FloatVectorOperations::copy(monoBuffer.getWritePointer(0, 0),
+                                              monoBuffer.getReadPointer(0, size),
+                                              monoBuffer.getNumSamples() - size);
+            // copy everything from our temp buffer to the end of our mono buffer
+            juce::FloatVectorOperations::copy(monoBuffer.getWritePointer(0, monoBuffer.getNumSamples() - size),
+                                              tempIncomingBuffer.getReadPointer(0, 0),
+                                              size);
+            // send mono buffers to the generator
+            leftChannelFFTDataGenerator.produceFFTDataForRendering(monoBuffer, -48.f); // -48 instead of -infinity since -48 is the bottom of the analyzer
+            
+        }
+    }
+    
+    const auto fftBounds = getAnalysisArea().toFloat();
+    const auto fftSize = leftChannelFFTDataGenerator.getFFTSize();
+    const auto bindWidth = audioProcessor.getSampleRate() / (double)fftSize;
+    // while there are FFT data buffers to pull,
+    while( leftChannelFFTDataGenerator.getNumAvailableFFTDataBlocks() > 0 )
+    {
+        std::vector<float> fftData;
+        // if we can pull a buffer,
+        if( leftChannelFFTDataGenerator.getFFTData(fftData))
+        {
+            // feed to our path producer.
+            pathProducer.generatePath(fftData, fftBounds, fftSize, bindWidth, -48.f);
+        }
+    }
+    
+    // while there are paths that can be pulled,
+    while( pathProducer.getNumPathsAvailable() )
+    {
+        // pull as many paths as possible,
+        pathProducer.getPath(leftChannelFFTPath);
+        // display the most recent path
+    }
+    
     // if it is true that parameters have been changed, we are going to set the parameters changed value back to false to indicate nothing has changed since the flag was checked
     if ( parametersChanged.compareAndSetBool(false, true) )
     {
@@ -230,8 +293,10 @@ void ResponseCurveComponent::timerCallback()
         // update the monochain
         updateChain();
         // signal a repaint
-        repaint();
+//        repaint();
     }
+    
+    repaint(); // need to repaint all the time because new paths are being produced all the time
 }
 
 void ResponseCurveComponent::updateChain()
@@ -331,6 +396,10 @@ void ResponseCurveComponent::paint (juce::Graphics& g)
     {
         responseCurve.lineTo(responseArea.getX() + i, map(mags[i]));
     }
+    
+    // path
+    g.setColour(Colours::blue);
+    g.strokePath(leftChannelFFTPath, PathStrokeType(1.f));
     
     // background border
     g.setColour(Colours::orange);
